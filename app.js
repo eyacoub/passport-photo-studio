@@ -113,7 +113,7 @@ import { removeBackgroundLocally } from "./background.js";
   sheetCanvasFull.height = SHEET_PX.h;
 
   // Track last valid quantity so empty typing doesn't "snap" instantly.
-  let lastGoodQty = 1;
+  let lastGoodQty = 4;
 
   // --- UI helpers ---
   function setStatus(text, kind = "info") {

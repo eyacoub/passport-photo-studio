@@ -93,7 +93,7 @@ const arabic = {
   "Failed to load stored photo.": "تعذّر فتح الصورة المحفوظة."
 };
 
-let language = "en";
+let language = "ar";
 const texts = new WeakMap();
 const attributes = new WeakMap();
 export const message = (key, params = {}) => ({ key, params });
@@ -130,7 +130,7 @@ export function localizedError(key, params = {}) {
   return error;
 }
 function applyLanguage(value) {
-  language = value === "ar" ? "ar" : "en";
+  language = value === "en" ? "en" : "ar";
   document.documentElement.lang = language;
   document.documentElement.dir = language === "ar" ? "rtl" : "ltr";
   document.title = translate("Passport Photo Studio");

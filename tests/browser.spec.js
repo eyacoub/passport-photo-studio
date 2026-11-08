@@ -6,6 +6,7 @@ import { readFile } from "node:fs/promises";
 const fixture = name => fileURLToPath(new URL(`./fixtures/${name}`, import.meta.url));
 
 test("local AI, download failure/retry, recoloring, and mixed-person A4 exports", async ({ page, context }) => {
+  await page.addInitScript(() => localStorage.setItem("passport_language", "en"));
   const requests = [];
   const errors = [];
   context.on("request", request => requests.push({ url: request.url(), method: request.method() }));
@@ -88,6 +89,7 @@ test("local AI, download failure/retry, recoloring, and mixed-person A4 exports"
 
 
 test("camera detects and captures a face without remote downloads", async ({ page, context }) => {
+  await page.addInitScript(() => localStorage.setItem("passport_language", "en"));
   const external = [];
   await context.route("https://**", route => { external.push(route.request().url()); return route.abort(); });
   await page.goto("/");
@@ -98,7 +100,7 @@ test("camera detects and captures a face without remote downloads", async ({ pag
   await expect(page.locator("#btnAddPhoto")).toBeEnabled({ timeout: 90_000 });
   await expect(page.locator("#processingMessage")).toContainText("Background removed locally");
   await page.locator("#btnAddPhoto").click();
-  await expect(page.locator("#sheetMeta")).toContainText("1/30 photos");
+  await expect(page.locator("#sheetMeta")).toContainText("4/30 photos");
   expect(external).toEqual([]);
 });
 
@@ -106,7 +108,8 @@ test("Arabic switch preserves photos, translates actions, and remembers the lang
   await context.route("https://**", route => route.abort());
   await page.goto("/");
   await expect(page.locator("#btnUpload")).toBeEnabled();
-  await page.locator("#languageSelect").selectOption("ar");
+  await expect(page.locator("#languageSelect")).toHaveValue("ar");
+  await expect(page.locator("#qty")).toHaveValue("4");
   await expect(page.locator("html")).toHaveAttribute("lang", "ar");
   await expect(page.locator("html")).toHaveAttribute("dir", "rtl");
   await expect(page).toHaveTitle("استوديو صور جواز السفر");
