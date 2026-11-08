@@ -1,0 +1,35 @@
+{
+  "name": "passport-photo-studio",
+  "version": "1.0.0",
+  "description": "Local passport photo editor with in-browser background removal and mixed-person A4 sheets",
+  "scripts": {
+    "start": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "test": "playwright test",
+    "prepare:assets": "node scripts/prepare-assets.mjs",
+    "prestart": "npm run prepare:assets",
+    "prebuild": "npm run prepare:assets"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/eyacoub/passport-photo-studio.git"
+  },
+  "keywords": [],
+  "author": "",
+  "type": "module",
+  "bugs": {
+    "url": "https://github.com/eyacoub/passport-photo-studio/issues"
+  },
+  "homepage": "https://eyacoub.github.io/passport-photo-studio/",
+  "dependencies": {
+    "@imgly/background-removal": "1.7.0",
+    "coi-serviceworker": "0.1.7",
+    "onnxruntime-web": "1.21.0"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.65.0",
+    "vite": "8.3.6"
+  },
+  "private": true
+}

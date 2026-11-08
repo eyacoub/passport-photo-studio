@@ -1,0 +1,21 @@
+# Environment variables (never commit API keys)
+.env
+.env.local
+.env.*.local
+
+# OS
+.DS_Store
+Thumbs.db
+
+node_modules/
+dist/
+playwright-report/
+test-results/
+
+public/ai/
+public/face/
+public/vendor/
+
+*.log
+public/coi-serviceworker.js
+public/licenses/

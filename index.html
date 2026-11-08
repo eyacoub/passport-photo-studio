@@ -1,0 +1,172 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="color-scheme" content="light" />
+    <title>Passport Photo Studio</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <header class="topbar">
+      <div class="topbar__inner">
+        <div class="brand">
+          <div class="brand__title" data-i18n="Passport Photo Studio">Passport Photo Studio</div>
+          <div class="brand__subtitle" data-i18n="Fast, studio-ready, browser-only passport photo generator">Fast, studio-ready, browser-only passport photo generator</div>
+        </div>
+        <div class="topbar__actions">
+          <label class="languageControl"><span data-i18n="Language">Language</span>
+            <select id="languageSelect" aria-label="Language / اللغة" dir="ltr">
+              <option value="en" lang="en">English</option>
+              <option value="ar" lang="ar">العربية</option>
+            </select>
+          </label>
+        <div class="topbar__status" id="statusPill" aria-live="polite" data-i18n="Ready">Ready</div>
+        </div>
+      </div>
+    </header>
+
+    <main class="container">
+      <section class="panel">
+        <div class="panel__head">
+          <h2 data-i18n="1) Camera">1) Camera</h2>
+          <p data-i18n="Align the face inside the guide. Capture is blocked until a face is detected and correctly sized.">Align the face inside the guide. Capture is blocked until a face is detected and correctly sized.</p>
+        </div>
+
+        <div class="cameraGrid">
+          <div class="cameraBox">
+            <video id="video" class="cameraVideo" autoplay playsinline muted></video>
+            <div class="overlay" aria-hidden="true">
+              <div class="overlay__frame">
+                <div class="overlay__centerDot"></div>
+                <div class="overlay__eyeLine"></div>
+                <div class="overlay__headGuide"></div>
+              </div>
+            </div>
+            <div class="hint" id="cameraHint" data-i18n="Start camera to begin.">Start camera to begin.</div>
+          </div>
+
+          <div class="controls">
+            <div class="controlRow">
+              <label class="label" for="cameraSelect" data-i18n="Camera">Camera</label>
+              <select id="cameraSelect" class="select"></select>
+            </div>
+
+            <div class="controlRow">
+              <button id="btnStart" class="btn btn--primary" data-i18n="Start Camera">Start Camera</button>
+              <button id="btnStop" class="btn btn--ghost" disabled data-i18n="Stop">Stop</button>
+            </div>
+
+            <div class="controlRow">
+              <button id="btnCapture" class="btn btn--accent" disabled data-i18n="Take Photo">Take Photo</button>
+              <button id="btnRetake" class="btn btn--ghost" disabled data-i18n="Retake">Retake</button>
+            </div>
+
+            <div class="controlRow">
+              <button id="btnUpload" class="btn btn--primary" disabled data-i18n="Upload Image">Upload Image</button>
+              <input id="fileInput" class="hidden" type="file" accept="image/*" />
+            </div>
+
+            <div class="msgBox" role="status" aria-live="polite">
+              <div class="msgBox__title" data-i18n="Validation">Validation</div>
+              <div class="msgBox__body" id="validationMsg" data-i18n="No camera running.">No camera running.</div>
+            </div>
+
+            <div class="smallNote" data-i18n="Tip: Use even lighting, remove harsh shadows, and keep the head straight.">
+              Tip: Use even lighting, remove harsh shadows, and keep the head straight.
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="panel">
+        <div class="panel__head">
+          <h2 data-i18n="2) Output">2) Output</h2>
+          <p data-i18n="Remove the background while preserving original colors and texture, then add the photo to your A4 sheet.">Remove the background while preserving original colors and texture, then add the photo to your A4 sheet.</p>
+        </div>
+
+        <div class="outputGrid">
+          <div class="outputBox">
+            <div class="outputBox__head">
+              <div class="outputBox__title" data-i18n="Processed Photo (35×45mm)">Processed Photo (35×45mm)</div>
+              <div class="outputBox__meta" id="photoMeta">—</div>
+            </div>
+            <canvas id="photoCanvas" class="canvas canvas--photo" width="413" height="531"></canvas>
+
+            <div class="controls controls--tight">
+              <div class="controlRow">
+                <label class="label" data-i18n="Background color">Background color</label>
+                <div class="colorOpts" role="group" aria-label="Background color" data-i18n-aria-label="Background color">
+                  <label class="colorOpt"><input type="radio" name="bgColor" value="FFFFFF" checked /> <span data-i18n="White">White</span></label>
+                  <label class="colorOpt"><input type="radio" name="bgColor" value="D0D0D0" /> <span data-i18n="Gray">Gray</span></label>
+                </div>
+              </div>
+
+              <div class="controlRow">
+                <button id="btnApplyBg" class="btn btn--primary" disabled data-i18n="Apply Background">Apply Background</button>
+              </div>
+
+              <p id="processingMessage" class="smallNote" role="status" aria-live="polite" data-i18n="Upload a photo or start the camera to begin.">Upload a photo or start the camera to begin.</p>
+              <div class="smallNote" data-i18n="Background removal runs on your device. No API key or photo upload. AI files are installed locally. Processing may take a little time.">
+                Background removal runs on your device. No API key or photo upload. AI files are installed locally. Processing may take a little time.
+              </div>
+            </div>
+          </div>
+
+          <div class="outputBox">
+            <div class="outputBox__head">
+              <div class="outputBox__title" data-i18n="Print Sheet Preview (A4)">Print Sheet Preview (A4)</div>
+              <div class="outputBox__meta" id="sheetMeta">—</div>
+            </div>
+            <canvas id="sheetCanvasPreview" class="canvas canvas--sheet" width="620" height="877"></canvas>
+
+            <div class="controls controls--tight">
+              <div class="controlRow">
+                <label class="label" for="qty" data-i18n="Copies to add">Copies to add</label>
+                <input
+                  id="qty"
+                  class="input"
+                  type="number"
+                  inputmode="numeric"
+                  min="1"
+                  max="30"
+                  step="1"
+                  value="1"
+                  disabled
+                />
+              </div>
+
+              <div class="controlRow">
+                <button id="btnAddPhoto" class="btn btn--accent" disabled data-i18n="Add current photo to sheet">Add current photo to sheet</button>
+              </div>
+              <p class="smallNote" data-i18n="Process one person, choose copies, then add to the sheet. Repeat for each person. Up to 30 photos total. Photos on the sheet stay separate from the current photo and are cleared when you refresh.">Process one person, choose copies, then add to the sheet. Repeat for each person. Up to 30 photos total. Photos on the sheet stay separate from the current photo and are cleared when you refresh.</p>
+              <div id="sheetPeople" class="sheetPeople" aria-label="Photos on sheet" data-i18n-aria-label="Photos on sheet"></div>
+              <p id="sheetMessage" role="status" aria-live="polite"></p>
+              <div class="controlRow">
+                <button id="btnDownloadJpg" class="btn btn--primary" disabled data-i18n="Download Print Sheet (JPG)">Download Print Sheet (JPG)</button>
+                <button id="btnDownloadPdf" class="btn btn--ghost" disabled data-i18n="Download Print Sheet (PDF)">Download Print Sheet (PDF)</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <footer class="footer">
+        <div data-i18n="Photos and AI processing stay on this computer. No API key is needed.">Photos and AI processing stay on this computer. No API key is needed.</div>
+      <div><span data-i18n="Background removal powered by">Background removal powered by</span> <a href="https://github.com/imgly/background-removal-js" target="_blank" rel="noopener">IMG.LY (AGPL-3.0)</a>.</div>
+      <div><a href="https://github.com/eyacoub/passport-photo-studio" target="_blank" rel="noopener" data-i18n="Source code">Source code</a> · <span data-i18n="Adapted from">Adapted from</span> <a href="https://github.com/asad200-stack/passport_id" target="_blank" rel="noopener">passport_id</a></div>
+      </footer>
+    </main>
+
+    <!-- Hidden working canvases -->
+    <canvas id="workCanvas" class="hidden"></canvas>
+    <canvas id="maskCanvas" class="hidden"></canvas>
+
+    <script src="./coi-serviceworker.js"></script>
+    <script src="./vendor/tf.min.js"></script>
+    <script src="./vendor/blazeface.min.js"></script>
+    <script src="./vendor/jspdf.umd.min.js"></script>
+
+    <script type="module" src="./app.js"></script>
+  </body>
+</html>

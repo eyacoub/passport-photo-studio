@@ -1,0 +1,21 @@
+Passport Photo Studio
+
+Adapted from https://github.com/asad200-stack/passport_id.
+Original source attribution is retained. No license for the original
+application is asserted by this project setup.
+
+Browser background removal: @imgly/background-removal (AGPL-3.0).
+https://github.com/imgly/background-removal-js
+The full license is distributed with the website at
+licenses/background-removal-AGPL-3.0.txt. Corresponding application source:
+https://github.com/eyacoub/passport-photo-studio
+
+Runtime and model assets are downloaded from the library's official data package.
+Face detection uses TensorFlow.js and BlazeFace (Apache-2.0).
+PDF export uses jsPDF (MIT).
+Static hosting isolation uses coi-serviceworker (MIT); its license is included
+at licenses/coi-serviceworker-MIT.txt in the published website.
+Other dependency licenses are included in their installed npm packages.
+
+Test portraits are public NASA images distributed by scikit-image and matplotlib.
+camera.y4m is generated from the sample astronaut portrait for automated testing.

@@ -1,0 +1,33 @@
+Local passport photo editor
+
+Double-click start-local.command, or run npm start in this folder.
+Open http://127.0.0.1:8088/ (refresh any previously open copy).
+Node.js and npm are required. Run npm ci if dependencies are missing.
+
+Background removal runs in a browser worker using @imgly/background-removal
+1.7.0 and ONNX Runtime 1.21.0. No API key is needed and photos are not sent to
+a server. npm start prepares model files and libraries locally once (internet
+is required for that installation). After installation, browser processing,
+face detection, and PDF exports work without internet. Missing assets are
+prepared again on startup. The higher-quality model processes the full photo
+before cropping and preserves colors without sharpening. After a refresh,
+re-upload the original for full-frame processing; only the last crop is restored.
+Use a current Chrome, Edge, or Safari.
+
+Process a person, choose copies, and click Add current photo to sheet.
+Repeat for other people. Up to 30 photos fit on A4, each 35 x 45 mm.
+Download JPG or PDF and print at actual size (100%). Refresh clears the sheet.
+
+npm run build creates dist/. npm run preview serves the production build.
+The local server sets cross-origin isolation headers for AI processing.
+Use the same headers when hosting the build elsewhere; see vite.config.js.
+
+Background removal library: https://github.com/imgly/background-removal-js
+Its AGPL-3.0 license is included at
+node_modules/@imgly/background-removal/LICENSE.md.
+No license for the original application is asserted by this local setup.
+
+Browser integration check: npm test
+First install its browser with npx playwright install chromium.
+The check uses public NASA sample portraits, blocks external connections, and
+checks local processing, retry, color changes, and mixed-person exports.
