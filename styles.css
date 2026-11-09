@@ -117,7 +117,7 @@ body{
 }
 .overlay__frame{
   width: min(64%, 360px);
-  aspect-ratio: 35 / 45;
+  aspect-ratio: var(--photo-ratio, 35 / 45);
   border-radius: 14px;
   outline: 999px solid rgba(0,0,0,.35);
   border: 2px solid rgba(2,132,199,.92);
@@ -157,6 +157,9 @@ body{
 .controls--tight{margin-top:12px}
 .controlRow{display:flex; gap:10px; align-items:center; flex-wrap:wrap;}
 .label{font-size:12px; color:var(--muted); min-width:84px}
+.photoSettings{display:grid; grid-template-columns:repeat(2, minmax(0, 1fr)); gap:10px}
+.photoSettings label{display:grid; grid-template-rows:1fr auto; gap:5px; min-width:0}
+.photoSettings :is(.input, .select){width:100%; min-width:0}
 .colorOpts{display:flex; gap:14px; align-items:center;}
 .colorOpt{display:flex; align-items:center; gap:6px; font-size:13px; cursor:pointer; color:var(--text)}
 .colorOpt input{accent-color:var(--accent)}

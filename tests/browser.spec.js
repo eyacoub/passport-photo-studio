@@ -89,18 +89,88 @@ test("local AI, download failure/retry, recoloring, and mixed-person A4 exports"
 
 
 test("camera detects and captures a face without remote downloads", async ({ page, context }) => {
-  await page.addInitScript(() => localStorage.setItem("passport_language", "en"));
+  await page.addInitScript(() => {
+    localStorage.setItem("passport_language", "en");
+    Object.defineProperty(navigator, "userAgent", { value: "iPhone" });
+    Object.defineProperty(navigator, "canShare", { value: ({ files }) => files.length === 1 });
+    Object.defineProperty(navigator, "share", { value: async ({ files: [file] }) => {
+      if (window.shareError) throw new DOMException("Share failed", window.shareError);
+      window.sharedFile = { name: file.name, type: file.type, bytes: [...new Uint8Array(await file.slice(0, 5).arrayBuffer())] };
+    } });
+  });
   const external = [];
   await context.route("https://**", route => { external.push(route.request().url()); return route.abort(); });
   await page.goto("/");
   await expect(page.locator("#btnUpload")).toBeEnabled();
+  const size = page.getByRole("combobox", { name: "Photo size" });
+  const photo = page.locator("#photoCanvas");
+  await expect(size).toHaveValue("35x45");
+  await size.selectOption("40x40");
+  await expect(page.locator(".overlay__frame")).toHaveCSS("aspect-ratio", "40 / 40");
   await page.locator("#btnStart").click();
   await expect(page.locator("#btnCapture")).toBeEnabled({ timeout: 30_000 });
   await page.locator("#btnCapture").click();
   await expect(page.locator("#btnAddPhoto")).toBeEnabled({ timeout: 90_000 });
   await expect(page.locator("#processingMessage")).toContainText("Background removed locally");
+  await expect(photo).toHaveAttribute("width", "709");
+  await expect(photo).toHaveAttribute("height", "709");
+  await size.selectOption("35x45");
   await page.locator("#btnAddPhoto").click();
   await expect(page.locator("#sheetMeta")).toContainText("4/30 photos");
+  const firstPhoto = await page.locator(".sheetPerson img").first().getAttribute("src");
+
+  await size.selectOption("50x30");
+  await expect(page.locator("#btnAddPhoto")).toBeEnabled();
+  await expect(photo).toHaveAttribute("width", "886");
+  await expect(photo).toHaveAttribute("height", "531");
+
+  await size.selectOption("120x80");
+  await expect(page.locator("#qty")).toHaveValue("3");
+  await expect(photo).toHaveAttribute("width", "2126");
+  await expect(photo).toHaveAttribute("height", "1417");
+  await page.locator("#btnAddPhoto").click();
+  await expect(page.locator("#sheetMessage")).toContainText("Only 2 spaces remain");
+  await page.locator("#qty").fill("2");
+  await page.locator("#btnAddPhoto").click();
+  await expect(page.locator("#sheetMeta")).toContainText("6 photos");
+  await expect(page.locator(".sheetPerson img").first()).toHaveAttribute("src", firstPhoto);
+  await expect(page.locator(".sheetPerson input").nth(1)).toHaveAttribute("max", "2");
+
+  // The exported A4 sheet should retain each photo's physical dimensions.
+  await page.evaluate(() => {
+    const strokeRect = CanvasRenderingContext2D.prototype.strokeRect;
+    window.exportedSizes = [];
+    CanvasRenderingContext2D.prototype.strokeRect = function (x, y, width, height) {
+      if (this.canvas.width === 2480) {
+        window.exportedSizes.push([Math.round(width * 210 / this.canvas.width),
+          Math.round(height * 297 / this.canvas.height)]);
+      }
+      return strokeRect.call(this, x, y, width, height);
+    };
+  });
+  const downloadPdf = page.locator("#btnDownloadPdf");
+  await downloadPdf.click();
+  await expect.poll(() => page.evaluate(() => window.sharedFile)).toEqual({
+    name: expect.stringMatching(/_x6\.pdf$/),
+    type: "application/pdf",
+    bytes: [37, 80, 68, 70, 45],
+  });
+  expect(await page.evaluate(() => window.exportedSizes)).toEqual([
+    [35, 45], [35, 45], [35, 45], [35, 45], [120, 80], [120, 80],
+  ]);
+
+  await page.evaluate(() => { window.shareError = "AbortError"; });
+  await downloadPdf.click();
+  await expect(page.locator("#exportMessage")).toBeEmpty();
+  await page.evaluate(() => { window.shareError = "NotAllowedError"; });
+  await downloadPdf.click();
+  await expect(page.locator("#exportMessage")).toContainText("Tap Download again");
+  const download = page.waitForEvent("download");
+  await downloadPdf.click();
+  expect((await download).suggestedFilename()).toMatch(/_x6\.pdf$/);
+  await expect(page).toHaveURL("/");
+  await expect(page.locator("#sheetMeta")).toContainText("6 photos");
+  await expect(page.locator("#exportMessage")).toBeEmpty();
   expect(external).toEqual([]);
 });
 

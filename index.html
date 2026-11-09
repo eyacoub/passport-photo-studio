@@ -88,7 +88,7 @@
         <div class="outputGrid">
           <div class="outputBox">
             <div class="outputBox__head">
-              <div class="outputBox__title" data-i18n="Processed Photo (35×45mm)">Processed Photo (35×45mm)</div>
+              <div class="outputBox__title" data-i18n="Processed Photo">Processed Photo</div>
               <div class="outputBox__meta" id="photoMeta">—</div>
             </div>
             <canvas id="photoCanvas" class="canvas canvas--photo" width="413" height="531"></canvas>
@@ -121,31 +121,34 @@
             <canvas id="sheetCanvasPreview" class="canvas canvas--sheet" width="620" height="877"></canvas>
 
             <div class="controls controls--tight">
-              <div class="controlRow">
-                <label class="label" for="qty" data-i18n="Copies to add">Copies to add</label>
-                <input
-                  id="qty"
-                  class="input"
-                  type="number"
-                  inputmode="numeric"
-                  min="1"
-                  max="30"
-                  step="1"
-                  value="4"
-                  disabled
-                />
+              <div class="photoSettings">
+                <label class="label">
+                  <span data-i18n="Copies to add">Copies to add</span>
+                  <input id="qty" class="input" type="number" inputmode="numeric"
+                    min="1" max="30" step="1" value="4" disabled />
+                </label>
+                <label class="label">
+                  <span data-i18n="Photo size">Photo size</span>
+                  <select id="photoSize" class="select" dir="ltr">
+                    <option value="35x45" selected>35 × 45 mm</option>
+                    <option value="40x40">40 × 40 mm</option>
+                    <option value="50x30">50 × 30 mm</option>
+                    <option value="120x80">120 × 80 mm</option>
+                  </select>
+                </label>
               </div>
 
               <div class="controlRow">
                 <button id="btnAddPhoto" class="btn btn--accent" disabled data-i18n="Add current photo to sheet">Add current photo to sheet</button>
               </div>
-              <p class="smallNote" data-i18n="Process one person, choose copies, then add to the sheet. Repeat for each person. Up to 30 photos total. Photos on the sheet stay separate from the current photo and are cleared when you refresh.">Process one person, choose copies, then add to the sheet. Repeat for each person. Up to 30 photos total. Photos on the sheet stay separate from the current photo and are cleared when you refresh.</p>
+              <p class="smallNote" data-i18n="Choose a photo size and number of copies, then add the photo to the sheet. A4 capacity depends on the sizes you add. Photos on the sheet are cleared when you refresh.">Choose a photo size and number of copies, then add the photo to the sheet. A4 capacity depends on the sizes you add. Photos on the sheet are cleared when you refresh.</p>
               <div id="sheetPeople" class="sheetPeople" aria-label="Photos on sheet" data-i18n-aria-label="Photos on sheet"></div>
               <p id="sheetMessage" role="status" aria-live="polite"></p>
               <div class="controlRow">
                 <button id="btnDownloadJpg" class="btn btn--primary" disabled data-i18n="Download Print Sheet (JPG)">Download Print Sheet (JPG)</button>
                 <button id="btnDownloadPdf" class="btn btn--ghost" disabled data-i18n="Download Print Sheet (PDF)">Download Print Sheet (PDF)</button>
               </div>
+              <div id="exportMessage" class="smallNote" role="status" aria-live="polite"></div>
             </div>
           </div>
         </div>

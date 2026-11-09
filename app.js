@@ -18,8 +18,12 @@ import { removeBackgroundLocally } from "./background.js";
   const SHEET_DPI = 300;
   const PHOTO_DPI = 450;
   const A4_MM = { w: 210, h: 297 };
-  const PHOTO_MM = { w: 35, h: 45 };
-  const PHOTO_AR = PHOTO_MM.w / PHOTO_MM.h; // 35:45
+  const PHOTO_SIZES = {
+    "35x45": { w: 35, h: 45 },
+    "40x40": { w: 40, h: 40 },
+    "50x30": { w: 50, h: 30 },
+    "120x80": { w: 120, h: 80 },
+  };
   const SHEET_LAYOUT = {
     maxCols: 5, // user requested: 5 photos per row
     marginMm: 5,
@@ -27,8 +31,6 @@ import { removeBackgroundLocally } from "./background.js";
   };
 
   const pxFromMm = (mm, dpi) => Math.round((mm / MM_PER_INCH) * dpi);
-  const PHOTO_PX = { w: pxFromMm(PHOTO_MM.w, PHOTO_DPI), h: pxFromMm(PHOTO_MM.h, PHOTO_DPI) };
-  const PHOTO_SHEET_PX = { w: pxFromMm(PHOTO_MM.w, SHEET_DPI), h: pxFromMm(PHOTO_MM.h, SHEET_DPI) };
   const SHEET_PX = { w: pxFromMm(A4_MM.w, SHEET_DPI), h: pxFromMm(A4_MM.h, SHEET_DPI) };
 
 
@@ -49,6 +51,8 @@ import { removeBackgroundLocally } from "./background.js";
   const cameraHint = $("cameraHint");
 
   const qtyInput = /** @type {HTMLInputElement} */ ($("qty"));
+  const photoSizeSelect = /** @type {HTMLSelectElement} */ ($("photoSize"));
+  const selectedSize = () => PHOTO_SIZES[photoSizeSelect.value];
   const btnDownloadJpg = /** @type {HTMLButtonElement} */ ($("btnDownloadJpg"));
   const btnDownloadPdf = /** @type {HTMLButtonElement} */ ($("btnDownloadPdf"));
 
@@ -98,6 +102,7 @@ import { removeBackgroundLocally } from "./background.js";
   let hasRawPhoto = false;
   // Segment the full frame before the passport crop to retain subject context.
   const backgroundSourceCanvas = document.createElement("canvas");
+  let backgroundFace = null;
   let backgroundCrop = null;
 
   const STORAGE = {
@@ -181,24 +186,11 @@ import { removeBackgroundLocally } from "./background.js";
         });
       }
 
-      rawPhotoCanvas.width = PHOTO_PX.w;
-      rawPhotoCanvas.height = PHOTO_PX.h;
-      const rctx = rawPhotoCanvas.getContext("2d", { willReadFrequently: true });
-      rctx.clearRect(0, 0, PHOTO_PX.w, PHOTO_PX.h);
-      rctx.drawImage(img, 0, 0, PHOTO_PX.w, PHOTO_PX.h);
-
-      photoCanvas.width = PHOTO_PX.w;
-      photoCanvas.height = PHOTO_PX.h;
-      const pctx = photoCanvas.getContext("2d", { willReadFrequently: true });
-      pctx.clearRect(0, 0, PHOTO_PX.w, PHOTO_PX.h);
-      pctx.drawImage(rawPhotoCanvas, 0, 0);
-
-      backgroundSourceCanvas.width = PHOTO_PX.w;
-      backgroundSourceCanvas.height = PHOTO_PX.h;
-      backgroundSourceCanvas.getContext("2d").drawImage(rawPhotoCanvas, 0, 0);
-      backgroundCrop = { sx: 0, sy: 0, sw: PHOTO_PX.w, sh: PHOTO_PX.h };
+      backgroundSourceCanvas.width = img.naturalWidth;
+      backgroundSourceCanvas.height = img.naturalHeight;
+      backgroundSourceCanvas.getContext("2d").drawImage(img, 0, 0);
       hasRawPhoto = true;
-      bindText(photoMeta, message("{width}×{height}mm • {pxWidth}×{pxHeight}px @ {dpi}DPI", { width: PHOTO_MM.w, height: PHOTO_MM.h, pxWidth: PHOTO_PX.w, pxHeight: PHOTO_PX.h, dpi: PHOTO_DPI }));
+      updatePhotoCrop();
       updateApplyBgUi();
       return true;
     } catch {
@@ -245,6 +237,7 @@ import { removeBackgroundLocally } from "./background.js";
     enable(btnApplyBg, hasRawPhoto && !busy);
     enable(btnUpload, !busy);
     enable(btnStart, !busy);
+    enable(photoSizeSelect, !busy);
     enable(btnRetake, !busy && (hasRawPhoto || !!stream));
     if (busy) enable(btnCapture, false);
     document.querySelectorAll('input[name="bgColor"]').forEach(radio => { radio.disabled = busy; });
@@ -271,13 +264,13 @@ import { removeBackgroundLocally } from "./background.js";
         if (revision === photoRevision && request === backgroundRequest) setValidation(message, "info");
       });
       if (revision !== photoRevision || request !== backgroundRequest) return;
-      pctx.clearRect(0, 0, PHOTO_PX.w, PHOTO_PX.h);
+      const { width, height } = photoCanvas;
       pctx.fillStyle = "#" + bgHex;
-      pctx.fillRect(0, 0, PHOTO_PX.w, PHOTO_PX.h);
+      pctx.fillRect(0, 0, width, height);
       const { sx, sy, sw, sh } = backgroundCrop;
       pctx.imageSmoothingEnabled = true;
       pctx.imageSmoothingQuality = "high";
-      pctx.drawImage(out, sx, sy, sw, sh, 0, 0, PHOTO_PX.w, PHOTO_PX.h);
+      pctx.drawImage(out, sx, sy, sw, sh, 0, 0, width, height);
       // Preserve original face/clothing pixels: no contrast boost or sharpening.
       afterProcessSuccess({ note: "Background removed locally. Ready to add to your sheet." });
     } catch (e) {
@@ -418,7 +411,7 @@ import { removeBackgroundLocally } from "./background.js";
     const yOff = Math.abs(bb.yCenter - 0.45); // slightly above center is typical for head framing
     const faceH = bb.height;
 
-    // Distance heuristics tuned for 35x45 guidance box
+    // Distance heuristics use the face height in the source frame.
     const TOO_FAR = 0.18;
     const TOO_CLOSE = 0.58;
 
@@ -450,24 +443,10 @@ import { removeBackgroundLocally } from "./background.js";
     }
   }
 
-  // --- Crop logic (auto, face-centered, 35:45 ratio) ---
+  // --- Crop logic (auto, face-centered) ---
   function clamp(n, a, b) {
     return Math.max(a, Math.min(b, n));
   }
-
-  function maxQtyForA4() {
-    // Conservative physical fit calculation (in mm).
-    const usableW = A4_MM.w - 2 * SHEET_LAYOUT.marginMm;
-    const usableH = A4_MM.h - 2 * SHEET_LAYOUT.marginMm;
-    const cols = Math.max(
-      1,
-      Math.min(SHEET_LAYOUT.maxCols, Math.floor((usableW + SHEET_LAYOUT.gapMm) / (PHOTO_MM.w + SHEET_LAYOUT.gapMm))),
-    );
-    const rows = Math.max(1, Math.floor((usableH + SHEET_LAYOUT.gapMm) / (PHOTO_MM.h + SHEET_LAYOUT.gapMm)));
-    return cols * rows;
-  }
-
-  const MAX_QTY_A4 = maxQtyForA4(); // typically 30 (5x6) for 35x45 on A4
 
   function parseQtyLenient() {
     const s = String(qtyInput?.value ?? "").trim();
@@ -477,36 +456,24 @@ import { removeBackgroundLocally } from "./background.js";
     return Math.trunc(n);
   }
 
-  function clampQty(n) {
-    return clamp(n, 1, MAX_QTY_A4);
-  }
-
-  function getQtyForRender() {
-    const n = parseQtyLenient();
-    if (n == null) return null;
-    const q = clampQty(n);
-    lastGoodQty = q;
-    return q;
-  }
-
   function normalizeQtyInInput() {
     const n = parseQtyLenient();
-    const q = clampQty(n == null ? lastGoodQty : n);
+    const q = clamp(n ?? lastGoodQty, 1, Number(qtyInput.max));
     lastGoodQty = q;
     if (qtyInput) qtyInput.value = String(q);
     return q;
   }
 
-  function computeCropRectFromFace(normFaceBox, srcW, srcH) {
+  function computeCropRectFromFace(normFaceBox, srcW, srcH, aspect) {
     // Estimate crop height based on face box (bbox is roughly face region).
     // For passport photos, face region should occupy ~55% of photo height (heuristic).
     const desiredFaceFrac = 0.55;
     let cropH = (normFaceBox.height * srcH) / desiredFaceFrac;
     cropH = clamp(cropH, srcH * 0.45, srcH * 0.98);
-    let cropW = cropH * PHOTO_AR;
+    let cropW = cropH * aspect;
     if (cropW > srcW) {
       cropW = srcW;
-      cropH = cropW / PHOTO_AR;
+      cropH = cropW / aspect;
     }
 
     const cx = normFaceBox.xCenter * srcW;
@@ -522,6 +489,37 @@ import { removeBackgroundLocally } from "./background.js";
     sy = clamp(sy, 0, srcH - cropH);
 
     return { sx, sy, sw: cropW, sh: cropH };
+  }
+
+  function updatePhotoCrop() {
+    const { w, h } = selectedSize();
+    const width = pxFromMm(w, PHOTO_DPI);
+    const height = pxFromMm(h, PHOTO_DPI);
+    photoCanvas.width = width;
+    photoCanvas.height = height;
+    if (!hasRawPhoto) return;
+
+    const { width: srcW, height: srcH } = backgroundSourceCanvas;
+    const aspect = w / h;
+    if (backgroundFace) {
+      backgroundCrop = computeCropRectFromFace(backgroundFace, srcW, srcH, aspect);
+    } else {
+      // A restored session only has the previously cropped image.
+      const sw = Math.min(srcW, srcH * aspect);
+      const sh = Math.min(srcH, srcW / aspect);
+      backgroundCrop = { sx: (srcW - sw) / 2, sy: (srcH - sh) / 2, sw, sh };
+    }
+
+    rawPhotoCanvas.width = width;
+    rawPhotoCanvas.height = height;
+    const rctx = rawPhotoCanvas.getContext("2d");
+    rctx.imageSmoothingQuality = "high";
+    const { sx, sy, sw, sh } = backgroundCrop;
+    rctx.drawImage(backgroundSourceCanvas, sx, sy, sw, sh, 0, 0, width, height);
+    photoCanvas.getContext("2d").drawImage(rawPhotoCanvas, 0, 0);
+    bindText(photoMeta, message("{width}×{height}mm • {pxWidth}×{pxHeight}px @ {dpi}DPI", {
+      width: w, height: h, pxWidth: width, pxHeight: height, dpi: PHOTO_DPI,
+    }));
   }
 
   // --- Capture -> Process ---
@@ -571,29 +569,12 @@ import { removeBackgroundLocally } from "./background.js";
       return;
     }
 
-    const crop = computeCropRectFromFace(bb, srcW, srcH);
     backgroundSourceCanvas.width = srcW;
     backgroundSourceCanvas.height = srcH;
     backgroundSourceCanvas.getContext("2d").drawImage(srcCanvas, 0, 0);
-    backgroundCrop = crop;
-
-    // Build RAW crop
-    rawPhotoCanvas.width = PHOTO_PX.w;
-    rawPhotoCanvas.height = PHOTO_PX.h;
-    const rctx = rawPhotoCanvas.getContext("2d", { willReadFrequently: true });
-    rctx.imageSmoothingEnabled = true;
-    rctx.imageSmoothingQuality = "high";
-    rctx.clearRect(0, 0, PHOTO_PX.w, PHOTO_PX.h);
-    rctx.drawImage(srcCanvas, crop.sx, crop.sy, crop.sw, crop.sh, 0, 0, PHOTO_PX.w, PHOTO_PX.h);
-
-    // Copy RAW into visible photo canvas
-    photoCanvas.width = PHOTO_PX.w;
-    photoCanvas.height = PHOTO_PX.h;
-    const pctx = photoCanvas.getContext("2d", { willReadFrequently: true });
-    pctx.clearRect(0, 0, PHOTO_PX.w, PHOTO_PX.h);
-    pctx.drawImage(rawPhotoCanvas, 0, 0);
-
+    backgroundFace = bb;
     hasRawPhoto = true;
+    updatePhotoCrop();
     updateApplyBgUi();
 
     // Persist RAW in this browser session so Apply Background remains clickable
@@ -608,7 +589,6 @@ import { removeBackgroundLocally } from "./background.js";
   }
 
   function afterProcessSuccess({ note }) {
-    bindText(photoMeta, message("{width}×{height}mm • {pxWidth}×{pxHeight}px @ {dpi}DPI", { width: PHOTO_MM.w, height: PHOTO_MM.h, pxWidth: PHOTO_PX.w, pxHeight: PHOTO_PX.h, dpi: PHOTO_DPI }));
     setValidation(message("Done. {note}", {note}), "ok");
     enable(qtyInput, true);
     currentPhotoReady = true;
@@ -617,87 +597,83 @@ import { removeBackgroundLocally } from "./background.js";
   }
 
   // --- Sheet generation ---
-  function gridForQty(qty) {
-    // Cutting-friendly layout:
-    // - Up to 5 photos per row (requested)
-    // - Then wrap to next row
-    const cols = Math.max(1, Math.min(SHEET_LAYOUT.maxCols, qty));
-    const rows = Math.max(1, Math.ceil(qty / cols));
-    return { cols, rows };
+  function columnsForSize(size) {
+    const { marginMm, gapMm, maxCols } = SHEET_LAYOUT;
+    return Math.min(maxCols, Math.floor((A4_MM.w - 2 * marginMm + gapMm) / (size.w + gapMm)));
   }
 
-  function renderSheet(targetCanvas, targetW, targetH, photos) {
-    const qty = photos.length;
-    const ctx = targetCanvas.getContext("2d", { willReadFrequently: false });
-    ctx.imageSmoothingEnabled = true;
-    ctx.imageSmoothingQuality = "high";
-
-    // Background
-    ctx.fillStyle = "#ffffff";
-    ctx.fillRect(0, 0, targetW, targetH);
-
-    // Convert print sizes to this canvas scale
-    const scaleX = targetW / SHEET_PX.w;
-    const scaleY = targetH / SHEET_PX.h;
-    const scale = Math.min(scaleX, scaleY);
-
-    // Keep real-world sizes correct for A4@300DPI (even if photo crop is rendered at higher DPI).
-    const photoW = PHOTO_SHEET_PX.w * scale;
-    const photoH = PHOTO_SHEET_PX.h * scale;
-    // Tighter layout for paper saving + easier cutting
-    const margin = SHEET_LAYOUT.marginMm * (SHEET_DPI / MM_PER_INCH) * scale; // mm -> px
-
-    const { cols, rows } = gridForQty(qty);
-    let gap = SHEET_LAYOUT.gapMm * (SHEET_DPI / MM_PER_INCH) * scale; // mm -> px
-
-    let gridW = cols * photoW + (cols - 1) * gap;
-    let gridH = rows * photoH + (rows - 1) * gap;
-
-    // If it doesn't fit, tighten the gap.
-    const maxW = targetW - margin * 2;
-    const maxH = targetH - margin * 2;
-    if (gridW > maxW && cols > 1) {
-      gap = Math.max(1 * scale, (maxW - cols * photoW) / (cols - 1));
-      gridW = cols * photoW + (cols - 1) * gap;
-    }
-    if (gridH > maxH && rows > 1) {
-      gap = Math.max(1 * scale, Math.min(gap, (maxH - rows * photoH) / (rows - 1)));
-      gridH = rows * photoH + (rows - 1) * gap;
+  function sheetRows(entries) {
+    // Group equal sizes into rows to keep horizontal cuts straight.
+    const groups = new Map();
+    for (const { size, canvas, copies } of entries) {
+      if (!groups.has(size)) groups.set(size, []);
+      const photos = groups.get(size);
+      for (let i = 0; i < copies; i++) photos.push(canvas);
     }
 
-    // Start from top-left so remaining paper can be reused.
-    const startX = margin;
-    const startY = margin;
-
-    // Draw photos (no shadows — cleaner for cutting)
-    ctx.save();
-    const stroke = Math.max(1, Math.round(1.2 * scale));
-    for (let r = 0; r < rows; r++) {
-      for (let c = 0; c < cols; c++) {
-        const i = r * cols + c;
-        if (i >= qty) break;
-        const x = startX + c * (photoW + gap);
-        const y = startY + r * (photoH + gap);
-        ctx.drawImage(photos[i], x, y, photoW, photoH);
-        ctx.lineWidth = stroke;
-        ctx.strokeStyle = "rgba(0,0,0,.18)";
-        ctx.strokeRect(x, y, photoW, photoH);
+    const rows = [];
+    for (const [size, photos] of groups) {
+      const cols = columnsForSize(size);
+      for (let i = 0; i < photos.length; i += cols) {
+        rows.push({ size, photos: photos.slice(i, i + cols) });
       }
     }
-    ctx.restore();
+    return rows;
   }
 
-  function sheetPhotos() {
-    return sheetEntries.flatMap(entry => Array(entry.copies).fill(entry.canvas));
+  function remainingCopies(size, rows) {
+    const { marginMm, gapMm } = SHEET_LAYOUT;
+    const usedHeight = rows.reduce((height, row) => height + row.size.h + gapMm, 0);
+    const freeHeight = A4_MM.h - 2 * marginMm + gapMm - usedHeight;
+    const cols = columnsForSize(size);
+    const openSlots = rows.reduce((slots, row) =>
+      row.size === size ? slots + cols - row.photos.length : slots, 0);
+    return openSlots + cols * Math.floor(freeHeight / (size.h + gapMm));
+  }
+
+  function renderSheet(targetCanvas, rows) {
+    const ctx = targetCanvas.getContext("2d");
+    const { width, height } = targetCanvas;
+    const pxPerMmX = width / A4_MM.w;
+    const pxPerMmY = height / A4_MM.h;
+    const { marginMm, gapMm } = SHEET_LAYOUT;
+
+    ctx.fillStyle = "#ffffff";
+    ctx.fillRect(0, 0, width, height);
+    ctx.imageSmoothingQuality = "high";
+    ctx.lineWidth = 1;
+    ctx.strokeStyle = "rgba(0,0,0,.18)";
+
+    let y = marginMm;
+    for (const { size, photos } of rows) {
+      for (const [col, photo] of photos.entries()) {
+        const x = marginMm + col * (size.w + gapMm);
+        const bounds = [x * pxPerMmX, y * pxPerMmY, size.w * pxPerMmX, size.h * pxPerMmY];
+        ctx.drawImage(photo, ...bounds);
+        ctx.strokeRect(...bounds);
+      }
+      y += size.h + gapMm;
+    }
+  }
+
+  function sheetPhotoCount() {
+    return sheetEntries.reduce((count, entry) => count + entry.copies, 0);
   }
 
   function renderSheetAll() {
-    const photos = sheetPhotos();
-    renderSheet(sheetCanvasFull, SHEET_PX.w, SHEET_PX.h, photos);
-    renderSheet(sheetCanvasPreview, sheetCanvasPreview.width, sheetCanvasPreview.height, photos);
-    bindText(sheetMeta, message("A4 • {people} people • {photos}/{max} photos • 35×45mm", {people: sheetEntries.length, photos: photos.length, max: MAX_QTY_A4}));
-    enable(btnDownloadJpg, photos.length > 0);
-    enable(btnDownloadPdf, photos.length > 0);
+    const rows = sheetRows(sheetEntries);
+    const count = sheetPhotoCount();
+    renderSheet(sheetCanvasFull, rows);
+    renderSheet(sheetCanvasPreview, rows);
+    const size = rows[0]?.size ?? selectedSize();
+    const people = sheetEntries.length;
+    bindText(sheetMeta, rows.every(row => row.size === size)
+      ? message("A4 • {people} people • {photos}/{max} photos • {width}×{height}mm", {
+        people, photos: count, max: remainingCopies(size, []), width: size.w, height: size.h,
+      })
+      : message("A4 • {people} people • {photos} photos", { people, photos: count }));
+    enable(btnDownloadJpg, count > 0);
+    enable(btnDownloadPdf, count > 0);
   }
 
   function renderPeople() {
@@ -710,20 +686,22 @@ import { removeBackgroundLocally } from "./background.js";
       bindAttribute(thumbnail, "alt", message("Person {id}", {id: entry.id}));
       const label = document.createElement("label");
       const personLabel = document.createElement("span");
-      bindText(personLabel, message("Person {id} copies", {id: entry.id}));
+      bindText(personLabel, message("Person {id} copies ({width}×{height}mm)", {
+        id: entry.id, width: entry.size.w, height: entry.size.h,
+      }));
       label.appendChild(personLabel);
       const input = document.createElement("input");
       input.type = "number";
       input.className = "input";
       input.min = "1";
-      input.max = String(MAX_QTY_A4 - sheetPhotos().length + entry.copies);
+      const available = remainingCopies(entry.size, sheetRows(sheetEntries.filter(other => other !== entry)));
+      input.max = String(available);
       input.value = String(entry.copies);
       const update = document.createElement("button");
       update.type = "button";
       update.className = "btn btn--primary";
       bindText(update, "Update copies");
       update.addEventListener("click", () => {
-        const available = MAX_QTY_A4 - sheetPhotos().length + entry.copies;
         const n = Number(input.value);
         entry.copies = Number.isFinite(n) ? clamp(Math.trunc(n), 1, available) : entry.copies;
         bindText(sheetMessage, "Copy count updated.");
@@ -748,54 +726,85 @@ import { removeBackgroundLocally } from "./background.js";
   function addCurrentPhoto() {
     if (!currentPhotoReady) return;
     const copies = normalizeQtyInInput();
-    if (sheetPhotos().length + copies > MAX_QTY_A4) {
-      bindText(sheetMessage, message("Not enough room. Only {remaining} spaces remain. Reduce copies or remove photos.", {remaining: MAX_QTY_A4 - sheetPhotos().length}));
+    const size = selectedSize();
+    const remaining = remainingCopies(size, sheetRows(sheetEntries));
+    if (copies > remaining) {
+      bindText(sheetMessage, message("Not enough room. Only {remaining} spaces remain. Reduce copies or remove photos.", {remaining}));
       return;
     }
     const canvas = document.createElement("canvas");
     canvas.width = photoCanvas.width;
     canvas.height = photoCanvas.height;
     canvas.getContext("2d").drawImage(photoCanvas, 0, 0);
-    sheetEntries.push({ id: nextPerson++, canvas, copies });
+    sheetEntries.push({ id: nextPerson++, canvas, copies, size });
     bindText(sheetMessage, "Photo added. Upload or capture the next person to continue.");
     renderPeople();
   }
 
   // --- Download helpers ---
+  const isAppleMobile = /iPad|iPhone|iPod/.test(navigator.userAgent)
+    || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+  let useDirectDownload = !isAppleMobile;
+
   function downloadDataUrl(dataUrl, filename) {
     const a = document.createElement("a");
     a.href = dataUrl;
     a.download = filename;
+    a.target = "_blank";
+    a.rel = "noopener";
     document.body.appendChild(a);
     a.click();
     a.remove();
   }
 
-  function exportJpg() {
-    const qty = sheetPhotos().length;
+  async function exportSheet(format) {
+    const qty = sheetPhotoCount();
     if (!qty) return;
-    renderSheetAll();
-    const name = `passport_sheet_${nowStamp()}_x${qty}.jpg`;
-    const dataUrl = sheetCanvasFull.toDataURL("image/jpeg", 0.95);
-    downloadDataUrl(dataUrl, name);
-  }
+    const exportMessage = $("exportMessage");
+    bindText(exportMessage, "");
+    try {
+      renderSheetAll();
+      const name = `passport_sheet_${nowStamp()}_x${qty}.${format}`;
+      let dataUrl = sheetCanvasFull.toDataURL("image/jpeg", 0.95);
+      const type = format === "pdf" ? "application/pdf" : "image/jpeg";
+      if (format === "pdf") {
+        const { jsPDF } = window.jspdf;
+        const pdf = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
+        pdf.addImage(dataUrl, "JPEG", 0, 0, A4_MM.w, A4_MM.h, undefined, "FAST");
+        // jsPDF's save() navigates to a blob URL, which can fail in Safari.
+        dataUrl = pdf.output("datauristring", { filename: name });
+      }
 
-  function exportPdf() {
-    const qty = sheetPhotos().length;
-    if (!qty) return;
-    renderSheetAll();
-    const name = `passport_sheet_${nowStamp()}_x${qty}.pdf`;
-    const dataUrl = sheetCanvasFull.toDataURL("image/jpeg", 0.95);
+      if (!useDirectDownload && navigator.share && navigator.canShare) {
+        const base64 = dataUrl.slice(dataUrl.indexOf(",") + 1);
+        const bytes = Uint8Array.from(atob(base64), byte => byte.charCodeAt(0));
+        const files = [new File([bytes], name, { type })];
+        if (navigator.canShare({ files })) {
+          try {
+            await navigator.share({ files });
+          } catch (error) {
+            if (error.name !== "AbortError") {
+              useDirectDownload = true;
+              bindText(exportMessage, "Couldn’t open the share sheet. Tap Download again to save directly.");
+            }
+          }
+          return;
+        }
+      }
 
-    const { jsPDF } = window.jspdf;
-    const pdf = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
-    pdf.addImage(dataUrl, "JPEG", 0, 0, A4_MM.w, A4_MM.h, undefined, "FAST");
-    pdf.save(name);
+      downloadDataUrl(dataUrl, name);
+    } catch {
+      bindText(exportMessage, "Couldn’t prepare the print sheet. Tap Download to try again.");
+    }
   }
 
   // --- Wire up events ---
   async function boot() {
     initializeLanguage();
+    for (const option of photoSizeSelect.options) {
+      const { w, h } = PHOTO_SIZES[option.value];
+      bindText(option, message("{width} × {height} mm", { width: w, height: h }));
+    }
     // Remove the old saved API key and restore the background color.
     try {
       localStorage.removeItem("passport_removebg_key");
@@ -811,23 +820,14 @@ import { removeBackgroundLocally } from "./background.js";
     updateApplyBgUi();
 
     setStatus("Ready", "info");
-    photoCanvas.width = PHOTO_PX.w;
-    photoCanvas.height = PHOTO_PX.h;
-
-    const pctx = photoCanvas.getContext("2d");
-    pctx.fillStyle = "#ffffff";
-    pctx.fillRect(0, 0, PHOTO_PX.w, PHOTO_PX.h);
-
-    const sctx = sheetCanvasPreview.getContext("2d");
-    sctx.fillStyle = "#ffffff";
-    sctx.fillRect(0, 0, sheetCanvasPreview.width, sheetCanvasPreview.height);
-
-    // Quantity input constraints (A4 capacity)
-    if (qtyInput) {
-      qtyInput.min = "1";
-      qtyInput.max = String(MAX_QTY_A4);
-      if (!String(qtyInput.value || "").trim()) qtyInput.value = String(lastGoodQty);
+    function updatePhotoSize() {
+      const { w, h } = selectedSize();
+      document.querySelector(".overlay__frame").style.setProperty("--photo-ratio", `${w} / ${h}`);
+      qtyInput.max = String(remainingCopies(selectedSize(), []));
+      normalizeQtyInInput();
+      updatePhotoCrop();
     }
+    updatePhotoSize();
 
     // Restore last captured photo (if any) so Apply Background is clickable after refresh.
     await restoreRawPhotoFromSession();
@@ -862,6 +862,7 @@ import { removeBackgroundLocally } from "./background.js";
       bindText(photoMeta, "—");
       renderSheetAll();
       hasRawPhoto = false;
+      updatePhotoCrop();
       updateApplyBgUi();
       try {
         sessionStorage.removeItem(STORAGE.rawPhoto);
@@ -950,21 +951,18 @@ import { removeBackgroundLocally } from "./background.js";
       }
     });
 
-    if (qtyInput) {
-      qtyInput.addEventListener("input", () => renderSheetAll());
-      qtyInput.addEventListener("change", () => {
-        normalizeQtyInInput();
-        renderSheetAll();
-      });
-      qtyInput.addEventListener("blur", () => {
-        normalizeQtyInInput();
-        renderSheetAll();
-      });
-    }
+    qtyInput.addEventListener("change", normalizeQtyInInput);
+    qtyInput.addEventListener("blur", normalizeQtyInInput);
+    photoSizeSelect.addEventListener("change", () => {
+      const wasReady = currentPhotoReady;
+      updatePhotoSize();
+      if (wasReady) void applyBackgroundToCurrent();
+      renderSheetAll();
+    });
     btnAddPhoto.addEventListener("click", addCurrentPhoto);
     renderSheetAll();
-    btnDownloadJpg.addEventListener("click", () => exportJpg());
-    btnDownloadPdf.addEventListener("click", () => exportPdf());
+    btnDownloadJpg.addEventListener("click", () => void exportSheet("jpg"));
+    btnDownloadPdf.addEventListener("click", () => void exportSheet("pdf"));
 
     enable(btnUpload, true);
 
