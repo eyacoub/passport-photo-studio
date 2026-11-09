@@ -5,7 +5,7 @@ import { readFile } from "node:fs/promises";
 // Public NASA portraits, sourced from scikit-image v0.24.0 and matplotlib v3.9.2.
 const fixture = name => fileURLToPath(new URL(`./fixtures/${name}`, import.meta.url));
 
-test("local AI, download failure/retry, recoloring, and mixed-person A4 exports", async ({ page, context }) => {
+test("local AI, download failure/retry, recoloring, and mixed-person A4 exports", async ({ page, context, browserName }) => {
   await page.addInitScript(() => localStorage.setItem("passport_language", "en"));
   const requests = [];
   const errors = [];
@@ -81,6 +81,17 @@ test("local AI, download failure/retry, recoloring, and mixed-person A4 exports"
   await page.locator(".sheetPerson").first().getByRole("button", { name: "Remove", exact: true }).click();
   await expect(page.locator(".sheetPerson")).toHaveCount(1);
   await expect(page.locator("#sheetMeta")).toContainText("3/30 photos");
+
+  // Playwright's temporary WebKit profile clears Cache Storage on reload.
+  if (browserName !== "webkit") {
+    await context.route("**/ai/*", route =>
+      /\/[a-f0-9]{64}$/.test(new URL(route.request().url()).pathname) ? route.abort() : route.continue());
+    await page.reload();
+    await expect(page.locator("#btnUpload")).toBeEnabled();
+    await page.locator("#fileInput").setInputFiles(fixture("astronaut.png"));
+    await expect(page.locator("#btnAddPhoto")).toBeEnabled({ timeout: 60_000 });
+  }
+
   expect(requests.filter(request => request.method !== "GET")).toEqual([]);
   expect(requests.filter(request => request.url.includes("api.remove.bg"))).toEqual([]);
   expect(requests.filter(request => request.url.startsWith("https://"))).toEqual([]);
