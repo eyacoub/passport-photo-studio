@@ -241,7 +241,7 @@ import { removeBackgroundLocally } from "./background.js";
     enable(btnRetake, !busy && (hasRawPhoto || !!stream));
     if (busy) enable(btnCapture, false);
     document.querySelectorAll('input[name="bgColor"]').forEach(radio => { radio.disabled = busy; });
-    bindText(btnApplyBg, busy ? "Removing background…" : "Apply Background");
+    bindText(btnApplyBg, busy ? "Processing…" : "Apply Background");
   }
 
   async function applyBackgroundToCurrent() {
@@ -259,7 +259,7 @@ import { removeBackgroundLocally } from "./background.js";
     const pctx = photoCanvas.getContext("2d", { willReadFrequently: true });
     setStatus("Processing…", "info");
     try {
-      setValidation("Removing background on this device…", "info");
+      setValidation("Processing…", "info");
       const out = await removeBackgroundLocally(backgroundSourceCanvas, bgHex, revision, (message) => {
         if (revision === photoRevision && request === backgroundRequest) setValidation(message, "info");
       });

@@ -20,17 +20,13 @@ function getWorker() {
     const task = pending.get(data.id);
     if (!task) return;
     if (data.progress) {
-      const { key, current, total } = data.progress;
-      const percent = total > 0 ? message("{value}%", {value: Math.round(current / total * 100)}) : "";
-      task.onProgress(key.startsWith("fetch:")
-        ? message("Loading local AI model…{percent}", {percent})
-        : "Removing background on this device…");
+      task.onProgress(data.progress);
       return;
     }
     if (data.error) {
       // The AI library caches initialization promises, including failures.
       // Restart it so retry can recover from an interrupted model download.
-      resetWorker(localizedError("Local background removal failed: {error}. Restart the local app to check its model files, then retry.", {error: data.error}));
+      resetWorker(localizedError("Local background removal failed: {error}. Tap Apply Background to retry.", {error: data.error}));
     } else {
       pending.delete(data.id);
       task.resolve(data.foreground);
@@ -48,11 +44,24 @@ async function createForeground(source, onProgress) {
   const activeWorker = getWorker();
   return new Promise((resolve, reject) => {
     const id = ++nextId;
-    const timeout = setTimeout(() => resetWorker(localizedError("Background processing took too long. Retry with a smaller photo.")), 300_000);
+    let timeout;
+    function trackProgress(key) {
+      clearTimeout(timeout);
+      const computing = key === "compute";
+      timeout = setTimeout(() => resetWorker(localizedError(computing
+        ? "Background processing took too long. Retry with a smaller photo."
+        : "The AI files stopped loading. Check your connection and tap Apply Background to retry.")),
+      computing ? 300_000 : 90_000);
+    }
+    trackProgress("model");
     pending.set(id, {
       resolve: value => { clearTimeout(timeout); resolve(value); },
       reject: error => { clearTimeout(timeout); reject(error); },
-      onProgress,
+      onProgress: ({ key, megabytes }) => {
+        trackProgress(key);
+        onProgress(key === "download" ? message("Downloading AI files… {size} MB loaded", {size: megabytes})
+          : key === "compute" ? "Removing background on this device…" : "Loading local AI model…");
+      },
     });
     activeWorker.postMessage({ id, image, publicPath: new URL("./ai/", window.location.href).href });
   });

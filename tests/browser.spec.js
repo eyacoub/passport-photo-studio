@@ -20,8 +20,18 @@ test("local AI, download failure/retry, recoloring, and mixed-person A4 exports"
 
   // A failed model download must leave a retryable photo, not add raw output.
   const modelRoute = "**/ai/**";
-  await context.route(modelRoute, route => route.abort());
+  let releaseModel;
+  const holdModel = new Promise(resolve => { releaseModel = resolve; });
+  await context.route(modelRoute, async route => {
+    await holdModel;
+    await route.abort();
+  });
   await page.locator("#fileInput").setInputFiles(fixture("astronaut.png"));
+  try {
+    await expect(page.locator("#validationMsg")).toContainText("Loading local AI model", { timeout: 30_000 });
+  } finally {
+    releaseModel();
+  }
   await expect(page.locator("#validationMsg")).toContainText("Background apply failed", { timeout: 60_000 });
   console.log("download failure handled");
   await expect(page.locator("#btnAddPhoto")).toBeDisabled();
