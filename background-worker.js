@@ -74,7 +74,18 @@ self.onmessage = ({ data: { id, image, publicPath } }) => {
       modelDirectory = publicPath;
       activeId = id;
       if (!modelReady) self.postMessage({ id, progress: { key: "model" } });
-      const foreground = await removeBackground(image, {
+      // Give the model space around clothing that touches the frame edges.
+      const source = await createImageBitmap(image);
+      const { width, height } = source;
+      const padding = Math.ceil(Math.max(width, height) * 0.075);
+      const canvas = new OffscreenCanvas(width + padding * 2, height + padding * 2);
+      const ctx = canvas.getContext("2d");
+      ctx.fillStyle = "#e7e9e9";
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      ctx.drawImage(source, padding, padding);
+      source.close();
+      const paddedImage = await canvas.convertToBlob({ type: "image/png" });
+      const paddedForeground = await removeBackground(paddedImage, {
         // Use the higher-quality model; the small quantized model loses fine edges.
         model: "isnet_fp16",
         publicPath,
@@ -87,6 +98,12 @@ self.onmessage = ({ data: { id, image, publicPath } }) => {
           }
         },
       });
+      const subject = await createImageBitmap(paddedForeground);
+      canvas.width = width;
+      canvas.height = height;
+      ctx.drawImage(subject, -padding, -padding);
+      subject.close();
+      const foreground = await canvas.convertToBlob({ type: "image/png" });
       self.postMessage({ id, foreground });
     } catch (error) {
       self.postMessage({ id, error: String(error?.message || error) });
