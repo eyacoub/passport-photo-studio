@@ -31,6 +31,7 @@ const arabic = {
   "Copies to add": "عدد النسخ المراد إضافتها",
   "Photo size": "مقاس الصورة",
   "{width} × {height} mm": "\u2066{width} × {height}\u2069 مم",
+  "{width} × {height} cm": "\u2066{width} × {height}\u2069 سم",
   "Add current photo to sheet": "إضافة الصورة الحالية إلى الورقة",
   "Choose a photo size and number of copies, then add the photo to the sheet. A4 capacity depends on the sizes you add. Photos on the sheet are cleared when you refresh.": "حدّد مقاس الصورة وعدد النسخ، ثم أضف الصورة إلى الورقة. يعتمد عدد الصور التي تتّسع لها ورقة A4 على المقاسات المضافة. تُمسح الصور من الورقة عند تحديث الصفحة.",
   "Photos on sheet": "الصور المضافة إلى الورقة",

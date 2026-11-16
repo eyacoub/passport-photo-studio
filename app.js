@@ -21,8 +21,9 @@ import { removeBackgroundLocally } from "./background.js";
   const PHOTO_SIZES = {
     "35x45": { w: 35, h: 45 },
     "40x40": { w: 40, h: 40 },
-    "50x30": { w: 50, h: 30 },
-    "120x80": { w: 120, h: 80 },
+    "30x50": { w: 30, h: 50 },
+    "35x50": { w: 35, h: 50 },
+    "80x120": { w: 80, h: 120, displayInCm: true },
   };
   const SHEET_LAYOUT = {
     maxCols: 5, // user requested: 5 photos per row
@@ -802,8 +803,11 @@ import { removeBackgroundLocally } from "./background.js";
   async function boot() {
     initializeLanguage();
     for (const option of photoSizeSelect.options) {
-      const { w, h } = PHOTO_SIZES[option.value];
-      bindText(option, message("{width} × {height} mm", { width: w, height: h }));
+      const { w, h, displayInCm } = PHOTO_SIZES[option.value];
+      const label = displayInCm
+        ? message("{width} × {height} cm", { width: w / 10, height: h / 10 })
+        : message("{width} × {height} mm", { width: w, height: h });
+      bindText(option, label);
     }
     // Remove the old saved API key and restore the background color.
     try {

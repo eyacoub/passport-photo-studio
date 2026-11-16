@@ -126,6 +126,8 @@ test("camera detects and captures a face without remote downloads", async ({ pag
   const size = page.getByRole("combobox", { name: "Photo size" });
   const photo = page.locator("#photoCanvas");
   await expect(size).toHaveValue("35x45");
+  expect(await size.locator("option").evaluateAll(options => options.map(option => option.value)))
+    .toEqual(["35x45", "40x40", "30x50", "35x50", "80x120"]);
   await size.selectOption("40x40");
   await expect(page.locator(".overlay__frame")).toHaveCSS("aspect-ratio", "40 / 40");
   await page.locator("#btnStart").click();
@@ -140,22 +142,23 @@ test("camera detects and captures a face without remote downloads", async ({ pag
   await expect(page.locator("#sheetMeta")).toContainText("4/30 photos");
   const firstPhoto = await page.locator(".sheetPerson img").first().getAttribute("src");
 
-  await size.selectOption("50x30");
+  await size.selectOption("30x50");
   await expect(page.locator("#btnAddPhoto")).toBeEnabled();
-  await expect(photo).toHaveAttribute("width", "886");
-  await expect(photo).toHaveAttribute("height", "531");
+  await expect(photo).toHaveAttribute("width", "531");
+  await expect(photo).toHaveAttribute("height", "886");
 
-  await size.selectOption("120x80");
-  await expect(page.locator("#qty")).toHaveValue("3");
-  await expect(photo).toHaveAttribute("width", "2126");
-  await expect(photo).toHaveAttribute("height", "1417");
+  await size.selectOption("35x50");
+  await expect(photo).toHaveAttribute("width", "620");
+  await expect(photo).toHaveAttribute("height", "886");
+
+  await size.selectOption("80x120");
+  await expect(page.locator("#qty")).toHaveValue("4");
+  await expect(photo).toHaveAttribute("width", "1417");
+  await expect(photo).toHaveAttribute("height", "2126");
   await page.locator("#btnAddPhoto").click();
-  await expect(page.locator("#sheetMessage")).toContainText("Only 2 spaces remain");
-  await page.locator("#qty").fill("2");
-  await page.locator("#btnAddPhoto").click();
-  await expect(page.locator("#sheetMeta")).toContainText("6 photos");
+  await expect(page.locator("#sheetMeta")).toContainText("8 photos");
   await expect(page.locator(".sheetPerson img").first()).toHaveAttribute("src", firstPhoto);
-  await expect(page.locator(".sheetPerson input").nth(1)).toHaveAttribute("max", "2");
+  await expect(page.locator(".sheetPerson input").nth(1)).toHaveAttribute("max", "4");
 
   // The exported A4 sheet should retain each photo's physical dimensions.
   await page.evaluate(() => {
@@ -172,12 +175,13 @@ test("camera detects and captures a face without remote downloads", async ({ pag
   const downloadPdf = page.locator("#btnDownloadPdf");
   await downloadPdf.click();
   await expect.poll(() => page.evaluate(() => window.sharedFile)).toEqual({
-    name: expect.stringMatching(/_x6\.pdf$/),
+    name: expect.stringMatching(/_x8\.pdf$/),
     type: "application/pdf",
     bytes: [37, 80, 68, 70, 45],
   });
   expect(await page.evaluate(() => window.exportedSizes)).toEqual([
-    [35, 45], [35, 45], [35, 45], [35, 45], [120, 80], [120, 80],
+    [35, 45], [35, 45], [35, 45], [35, 45],
+    [80, 120], [80, 120], [80, 120], [80, 120],
   ]);
 
   await page.evaluate(() => { window.shareError = "AbortError"; });
@@ -188,9 +192,9 @@ test("camera detects and captures a face without remote downloads", async ({ pag
   await expect(page.locator("#exportMessage")).toContainText("Tap Download again");
   const download = page.waitForEvent("download");
   await downloadPdf.click();
-  expect((await download).suggestedFilename()).toMatch(/_x6\.pdf$/);
+  expect((await download).suggestedFilename()).toMatch(/_x8\.pdf$/);
   await expect(page).toHaveURL("/");
-  await expect(page.locator("#sheetMeta")).toContainText("6 photos");
+  await expect(page.locator("#sheetMeta")).toContainText("8 photos");
   await expect(page.locator("#exportMessage")).toBeEmpty();
   expect(external).toEqual([]);
 });
