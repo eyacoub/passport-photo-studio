@@ -23,6 +23,7 @@ import { removeBackgroundLocally } from "./background.js";
     "40x40": { w: 40, h: 40 },
     "30x50": { w: 30, h: 50 },
     "35x50": { w: 35, h: 50 },
+    "50x50": { w: 50, h: 50 },
     "80x120": { w: 80, h: 120, displayInCm: true },
   };
   const SHEET_LAYOUT = {

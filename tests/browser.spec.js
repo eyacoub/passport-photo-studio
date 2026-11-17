@@ -127,7 +127,7 @@ test("camera detects and captures a face without remote downloads", async ({ pag
   const photo = page.locator("#photoCanvas");
   await expect(size).toHaveValue("35x45");
   expect(await size.locator("option").evaluateAll(options => options.map(option => option.value)))
-    .toEqual(["35x45", "40x40", "30x50", "35x50", "80x120"]);
+    .toEqual(["35x45", "40x40", "30x50", "35x50", "50x50", "80x120"]);
   await size.selectOption("40x40");
   await expect(page.locator(".overlay__frame")).toHaveCSS("aspect-ratio", "40 / 40");
   await page.locator("#btnStart").click();
